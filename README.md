@@ -1,112 +1,104 @@
-Here’s a `README.md` file focusing on the static localization functionality of your project:
+Here’s a user-friendly README for your package:
 
-```markdown
-# Static Localization with `LocalizeManager`
+---
 
-This project provides a mechanism for localizing static fields in a given data set. The `LocalizeManager` handles the translation of placeholders in strings, which are defined in static translation files. This is particularly useful for translating content like UI strings, messages, and labels in different languages.
+# pylocalize
+
+A flexible localization package for FastAPI that supports both static and dynamic field translations. Easily localize your application’s response data based on predefined static translations or dynamic database fields.
+
+---
 
 ## Features
 
-- **Static Field Translation**: Translate specific fields in an object or list based on predefined static translations.
-- **Customizable Language Prefixes**: Allows the use of different language prefixes for the translations (e.g., `en` for English, `es` for Spanish).
-- **Supports JSON Files**: The static translation data can be loaded from a JSON file for easy management.
+- **Static Localization:** Translate static fields in your response based on predefined translation data (from a JSON file).
+- **Dynamic Localization:** Automatically localize dynamic database fields (e.g., `field`, `field_es`).
+- **Integration with FastAPI:** Simple decorators to localize response data in FastAPI routes.
+- **Supports Multiple Languages:** Translate content between multiple languages (e.g., English and Spanish).
 
-## Setup
+---
 
-### 1. Install the Required Libraries
+## Installation
 
-If you haven't already, make sure to install the necessary dependencies for your project. This includes FastAPI and any other relevant dependencies:
+You can install `pylocalize` using pip:
 
 ```bash
-pip install fastapi
+pip install pylocalize
 ```
 
-### 2. Prepare the Static Translation Data
+---
 
-Static translation data should be in the form of a JSON file, where each key is a placeholder and each value is a dictionary containing translations for different languages.
+## Usage
 
-Example of `static_data.json`:
+### Step 1: Prepare your static translation data
+
+Create a `static_data.json` file with translations in the following format:
 
 ```json
 {
-  "greeting": {
-    "en": "Hello",
-    "es": "Hola"
-  },
-  "test": {
-    "en": "Test",
-    "es": "Prueba"
-  }
+    "greeting": {
+        "en": "Hello",
+        "es": "Hola"
+    },
+    "test": {
+        "en": "Test",
+        "es": "Prueba"
+    }
 }
 ```
 
-### 3. Initialize the `LocalizeManager`
+### Step 2: Integrate localization into your FastAPI app
 
-The `LocalizeManager` is responsible for loading the static data and providing translation methods. It is initialized with the path to the JSON file that contains the translations.
+Import the necessary classes and decorators from `pylocalize` and set up your `FastAPI` routes.
 
-```python
-from pylocalize import LocalizeManager
+---
 
-localizer = LocalizeManager(static_data_path="static/static_data.json")
-```
+### Example
 
-### 4. Using `localize_static_response` Decorator
-
-The decorator `localize_static_response` applies static translations to the response fields of your FastAPI endpoints. It accepts the following parameters:
-- `default_prefix`: The default language prefix (e.g., `"en"`).
-- `desired_prefix`: The desired language prefix (e.g., `"es"`).
-- `fields`: A list of fields to be localized.
-
-#### Example Usage in FastAPI
-
-Here is an example FastAPI endpoint using the `localize_static_response` decorator to localize static fields:
+Below is an example of how to use the `LocalizeManager` and the decorators `localize_static_response` and `localize_database_response` for both static and dynamic translations.
 
 ```python
-from fastapi import FastAPI, Depends
-from pylocalize import LocalizeManager, localize_static_response
+from typing import Any, Generator
+import sqlite3
+from fastapi import FastAPI, Depends, HTTPException
+from pylocalize import (
+    LocalizeManager,
+    localize_static_response,
+    localize_database_response,
+)
+
+DATABASE = "example.db"
+
+def get_db() -> Generator[sqlite3.Connection, None, None]:
+    conn = sqlite3.connect(DATABASE, check_same_thread=False)
+    conn.row_factory = sqlite3.Row
+    try:
+        yield conn
+    finally:
+        conn.close()
 
 app = FastAPI()
 
+# Initialize LocalizeManager with your static translations JSON
 localizer = LocalizeManager(static_data_path="static/static_data.json")
 
+# Static localization route
 @app.get("/static")
 @localize_static_response(default_prefix="en", desired_prefix="es", fields=["message"])
 async def get_static_response(
     localizer: LocalizeManager = Depends(lambda: localizer),
-) -> dict:
+) -> Any:
     data = {
         "message": "{greeting} Mark {test}",
         "example_with_only_string": localizer.translate("{greeting} Mark", "es"),
     }
     return data
-```
 
-In this example, the field `message` is localized for both English (`en`) and Spanish (`es`) based on the static translation data.
-
-### 5. Output Example
-
-For the request to `/static`, the translated response might look like:
-
-```json
-{
-  "message_en": "Hello Mark Test",
-  "message_es": "Hola Mark Prueba",
-  "example_with_only_string": "Hola Mark"
-}
-```
-
-### 6. Localize Lists of Dictionaries
-
-The `localize_static_response` decorator can also be applied to list responses, where each item in the list is a dictionary. Static translations are applied to the specified fields in each dictionary within the list.
-
-Example for list response:
-
-```python
+# Static localization for a list
 @app.get("/static/list")
 @localize_static_response(default_prefix="en", desired_prefix="es", fields=["message"])
 async def get_static_response_list(
     localizer: LocalizeManager = Depends(lambda: localizer),
-) -> list:
+) -> Any:
     data = [
         {
             "message": "{greeting} Mark {test}",
@@ -114,15 +106,83 @@ async def get_static_response_list(
         }
     ]
     return data
+
+# Database dynamic localization route
+@app.get("/users")
+@localize_database_response(default_prefix="en", desired_prefix="es", fields=["field"])
+async def get_users(
+    conn: sqlite3.Connection = Depends(get_db),
+    localizer: LocalizeManager = Depends(lambda: localizer),
+) -> list[Any]:
+    cursor = conn.cursor()
+    cursor.execute("SELECT id, name, field, field_es FROM users")
+    rows = cursor.fetchall()
+    return [dict(row) for row in rows]
+
+# Dynamic localization for a single user
+@app.get("/users/{user_id}")
+@localize_database_response(default_prefix="en", desired_prefix="es", fields=["field"])
+async def get_user_details(
+    user_id: int,
+    conn: sqlite3.Connection = Depends(get_db),
+    localizer: LocalizeManager = Depends(lambda: localizer),
+) -> Any:
+    cursor = conn.cursor()
+    cursor.execute(
+        "SELECT id, name, field, field_es FROM users WHERE id = ?", (user_id,)
+    )
+    row = cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="User not found")
+    return dict(zip([column[0] for column in cursor.description], row))
 ```
 
-The response will contain the localized fields for each item in the list, similar to the example above.
+### Step 3: Use in Your FastAPI Routes
 
-## Notes
+- **Static Localization:** Decorate your route with `@localize_static_response` to automatically translate the specified fields (`message` in this case) based on the provided language prefixes.
+- **Dynamic Localization:** Decorate your route with `@localize_database_response` to translate dynamic fields (e.g., `field`, `field_es`) fetched from the database.
 
-- The static translation data file (`static_data.json`) should be structured properly to include all necessary translations.
-- You can extend the `LocalizeManager` to handle more complex use cases, such as nested translations or integrating with external translation services.
+---
+
+## Decorators
+
+### `localize_static_response`
+
+Decorates FastAPI routes to localize static fields.
+
+**Parameters:**
+- `default_prefix`: The default language prefix (e.g., `"en"`).
+- `desired_prefix`: The language you want to translate to (e.g., `"es"`).
+- `fields`: A list of fields in the response that should be localized.
+
+### `localize_database_response`
+
+Decorates FastAPI routes to localize dynamic database fields.
+
+**Parameters:**
+- `default_prefix`: The default language prefix (e.g., `"en"`).
+- `desired_prefix`: The language you want to translate to (e.g., `"es"`).
+- `fields`: A list of dynamic fields in the response that should be localized.
+
+---
+
+## How It Works
+
+1. **Static Localization:** The `LocalizeManager` class loads translations from a JSON file and provides a `translate` method for localizing placeholders within string values.
+2. **Dynamic Localization:** When retrieving records from the database, the `localize_database_response` decorator translates fields dynamically (e.g., `field`, `field_es`) based on the language prefixes.
+
+---
 
 ## Contributing
 
-Feel free to contribute by adding new features, improving documentation, or fixing bugs. Please fork the repository and submit pull requests for any changes.
+We welcome contributions to `pylocalize`. If you'd like to help improve the package, please fork the repository and submit a pull request.
+
+---
+
+## License
+
+`pylocalize` is licensed under the MIT License. See [LICENSE](LICENSE) for more information.
+
+---
+
+This README provides an easy-to-follow guide for integrating your localization package into FastAPI applications, ensuring users can quickly get started.

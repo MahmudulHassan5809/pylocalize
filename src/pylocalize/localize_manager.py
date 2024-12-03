@@ -34,7 +34,7 @@ class LocalizeManager:
         Returns:
             A dictionary of translations loaded from the file.
         """
-        with open(path, "r", encoding="utf-8") as file:
+        with open(path, encoding="utf-8") as file:
             return json.load(file)  # type: ignore
 
     def translate(self, value: str, prefix: str) -> str:
@@ -102,19 +102,16 @@ class LocalizeManager:
             desired_prefix: The desired language prefix (e.g., "es").
 
         Returns:
-            The dictionary with dynamically translated fields added.
+            The dictionary with dynamically translated fields added, excluding original fields.
         """
         for field in fields:
-            obj[f"{field}_{default_prefix}"] = obj.get(field, "")
-            obj[f"{field}_{desired_prefix}"] = obj.get(
-                f"{field}_{desired_prefix}", obj.get(field, "")
-            )
+            # Only add translated fields and exclude the original field
+            if field in obj:
+                obj[f"{field}_{default_prefix}"] = obj.get(field, "")
+                obj[f"{field}_{desired_prefix}"] = obj.get(
+                    f"{field}_{desired_prefix}", obj.get(field, "")
+                )
+                # Remove the original field from the result
+                obj.pop(field, None)
+
         return obj
-
-
-if __name__ == "__main__":
-    localizer = LocalizeManager()
-
-    data = {"message": "{greeting} Mark test {test} {test3}"}
-    result = localizer.translate_static(data, default_prefix="en", desired_prefix="es")
-    print(result)
