@@ -1,7 +1,3 @@
-Here’s a user-friendly README for your package:
-
----
-
 # pylocalize
 
 A flexible localization package for FastAPI that supports both static and dynamic field translations. Easily localize your application’s response data based on predefined static translations or dynamic database fields.
@@ -13,7 +9,6 @@ A flexible localization package for FastAPI that supports both static and dynami
 - **Static Localization:** Translate static fields in your response based on predefined translation data (from a JSON file).
 - **Dynamic Localization:** Automatically localize dynamic database fields (e.g., `field`, `field_es`).
 - **Integration with FastAPI:** Simple decorators to localize response data in FastAPI routes.
-- **Supports Multiple Languages:** Translate content between multiple languages (e.g., English and Spanish).
 
 ---
 
